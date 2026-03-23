@@ -4,8 +4,7 @@ module cpu (
     input [31:0] read_data,
     input [31:0] inst,
     output [31:0] pca,
-    // output [31:0] c,
-    // output [31:0] r2,
+
     output [31:0] addra,
     output [31:0] dina,
     output [2:0] funct3,
@@ -15,7 +14,6 @@ module cpu (
     output          debug_wb_ena,
     output [4:0]    debug_wb_reg,
     output [31:0]   debug_wb_value
-    //output ena
 );
     
 
@@ -23,7 +21,7 @@ module cpu (
     reg [31:0] npc,a,b,reg_wdata;
     wire is_branch,EX_pc_branch;
     wire [3:0] alu_op;
-    wire branch,rmem,wmem,alu_a,alu_b,wreg,pc_imm,pcSrc;
+    wire branch,rmem,wmem,alu_a,alu_b,wreg,pc_imm,pcSrc,predict,pre_result;
     wire [1:0] mem_to_reg,is_i_r,EX_pc_choose;
     assign pc4=pc+4;
  //hazard   
@@ -38,7 +36,6 @@ module cpu (
     assign addra=MEM_c;
     assign dina=MEM_forword_r2;
     assign funct3=MEM_control[20:18];
-    //assign ena=MEM_control[30];
     assign w_data=MEM_control[27];
     assign debug_wb_have_inst=WB_control[0]&&WB_pc>=32'h00000000;
     assign debug_wb_pc=WB_pc;
@@ -81,19 +78,16 @@ module cpu (
         EX_r1<=r1;
         EX_r2<=r2;
         EX_rd<=ID_inst[11:7];
-        EX_rst<=ID_rst;//???????????????????????????????
+        EX_rst<=ID_rst;
         EX_pcimm<=ID_pcimm;
         if(EX_flash||EX_rst)EX_control<=32'b0;
-        else EX_control<={branch,rmem,mem_to_reg,wmem,alu_a,alu_b,pc_imm,pcSrc,wreg,ID_inst[30],ID_inst[14:12],ID_inst[19:15],ID_inst[24:20],ID_ebreak,6'd0,control_last};
+        else EX_control<={branch,rmem,mem_to_reg,wmem,alu_a,alu_b,pc_imm,pcSrc,wreg,ID_inst[30],ID_inst[14:12],ID_inst[19:15],ID_inst[24:20],ID_ebreak,predict,5'd0,control_last};
         
     end
   
     //EX
     reg [31:0] MEM_pc,MEM_pc4,MEM_imm,MEM_c,MEM_r2,MEM_pcimm,MEM_control,MEM_forword_r2;
     reg [4:0] MEM_rd;
-    //reg [1:0] MEM_pc_choose;
-    //wire [31:0] EX_pcimm;
-    //assign EX_pcimm=EX_pc+EX_imm;
     always @(posedge clk) begin
         MEM_pc<=EX_pc;
         MEM_pc4<=EX_pc4;
@@ -144,7 +138,7 @@ module cpu (
         endcase
     end
     
-    
+ //所有例化模块   
 
    // IM IM1(.addr(pc),.inst_out(inst));
     pc_module pc1(
@@ -186,8 +180,7 @@ module cpu (
         .b( b ),
         .c( c ),
         .is_branch( is_branch  )
-    );//???alu_op
-    //DM DM1(.clk(clk),.wmem( MEM_control[27] ),.addr( MEM_c  ),.data_in(  MEM_r2  ),.funct3(   MEM_control[20:18]   ),.read_data(  read_data  ));
+    );
     alu_ctrl alu_ctrl1(
         .funct(EX_control[21:18]),
         .is_i_r(  EX_is_i_r  ),
@@ -214,8 +207,17 @@ module cpu (
         .EX_pc_branch(EX_pc_branch),
         .ID_flash(ID_flash)
     );
+    bht bht1(
+        .clk(clk),
+        .rst(rst),
+        .ID_index(ID_pc[11:2]),//被预测pc
+        .update_en(EX_control[31]||EX_control[24]),//更新使能
+        .update_pc(EX_pc[11:2]),//更新pc
+        .pre_result(pre_result),//预测结果
+        .predict(predict)//id阶段预测
+    );
 
-
+assign  pre_result=is_branch||EX_control[24];
 
 //测试输出
     integer f=0;
@@ -232,13 +234,16 @@ module cpu (
 
 
 //npc    pc地址选择    
-    assign EX_pc_choose=(EX_control[24]||(EX_control[31]&&is_branch))?2'b01:EX_control[23]?2'b10:2'b00;
-    assign EX_pc_branch=EX_control[24]||(EX_control[31]&&is_branch)||EX_control[23];//hazard
+    //assign EX_pc_choose=(EX_control[24]||(EX_control[31]&&is_branch))?2'b01:EX_control[23]?2'b10:2'b00;
+    //assign EX_pc_branch=EX_control[24]||(EX_control[31]&&is_branch)||EX_control[23];//hazard
+    assign EX_pc_choose=(predict||EX_control[24])?1:EX_control[23]?2:0;
+    assign EX_pc_branch=(EX_control[6]!=is_branch)||EX_control[23];
+    
     always @(*) begin   //npc
         case (EX_pc_choose)
             2'b00: npc=pc4;
-            2'b01: npc=EX_pcimm;//jal  branch???？？？？？？？？？？？？？？？？？
-            2'b10: npc=c&32'hfffffffe;//jalr不用判断直接切pc？？？？？？？？？？？？？？？？？？？？？
+            2'b01: npc=EX_pcimm;
+            2'b10: npc=c&32'hfffffffe;//jalr
             default: npc=pc4;
         endcase
     end
