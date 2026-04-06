@@ -51,14 +51,20 @@ module miniRV_SoC (
         .a          (pc[15:2]),
         .spo        (inst)
     );
-    
-    DM Mem_DRAM (
+    // DRAM Mem_DRAM (
+    //     .clk        (fpga_clk),
+    //     .a          (c[15:0]),
+    //     .spo        (read_data),
+    //     .we         (wmem),
+    //     .d          (r2)
+    // );
+    DM2 Mem_DRAM (
         .clk        (fpga_clk),
-        .addr          (c[15:0]),
+        .a          (c[17:2]),
         .spo        (read_data),
         .we         (wmem),
-        .d          (r2),
-        .funct3     (funct3)
+        .d          (r2)
+        //.funct3     (funct3)
     );
 
     
@@ -127,13 +133,13 @@ endmodule
 //         .spo        (inst)
 //     );
 
-//     DRAM Mem_DRAM (
-//         .clk        (cpu_clk),
-//         .a          (Bus_addr[15:2]),
-//         .spo        (Bus_rdata),
-//         .we         (Bus_wen),
-//         .d          (Bus_wdata)
-//     );
+    // DRAM Mem_DRAM (
+    //     .clk        (cpu_clk),
+    //     .a          (Bus_addr[15:2]),
+    //     .spo        (Bus_rdata),
+    //     .we         (Bus_wen),
+    //     .d          (Bus_wdata)
+    // );
     
 //     // TODO: 在此实例化你的外设I/O接口电路模块
 //     //
